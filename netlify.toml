@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NEXT_TELEMETRY_DISABLED = "1"
+  # Set this to your email (comma-separated) to access /admin
+  # NEXT_PUBLIC_ADMIN_EMAILS = ""

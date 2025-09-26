@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, MapPin, DollarSign, Calendar, AlertCircle } from "lucide-react";
 import Logo from "@/components/Logo";
+import Header from "@/components/Header";
 
 type ApiResponse = {
   inputs: {
@@ -138,7 +139,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900 dark:bg-black dark:text-white">
-      <div className="max-w-3xl mx-auto px-6 py-10">
+      <Header />
+      <div className="max-w-3xl mx-auto px-6 py-10 pt-24">
         <header className="mb-8">
           <h1 className="text-3xl font-bold">Boundly</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">

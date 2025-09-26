@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -24,7 +25,18 @@ export default function AdminPage() {
       router.replace("/");
     }
   }, [status, session, allow, router]);
-  if (status !== "authenticated") return null;
+
+  // Don't render anything until we're sure about authentication
+  if (status === "loading" || status !== "authenticated") {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   async function runIngest() {
     setLoading(true);
@@ -47,7 +59,9 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-[70vh] max-w-3xl mx-auto px-6 py-10">
+    <>
+      <Header />
+      <div className="min-h-[70vh] max-w-3xl mx-auto px-6 py-10 pt-24">
       <h1 className="text-2xl font-semibold mb-4">Admin: Dataset Ingestion</h1>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
         Download and parse the official OFLC/FLAG wage dataset for a selected year into a local index.
@@ -78,9 +92,10 @@ export default function AdminPage() {
       {error && <p className="text-sm text-red-600">{error}</p>}
       {output && (
         <pre className="mt-4 text-xs whitespace-pre-wrap rounded-lg border border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-900/40">
-{JSON.stringify(output, null, 2)}
+          {JSON.stringify(output, null, 2)}
         </pre>
       )}
-    </div>
+      </div>
+    </>
   );
 }

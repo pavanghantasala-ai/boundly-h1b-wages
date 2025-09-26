@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Disable static optimization for problematic pages
+  generateBuildId: async () => {
+    return 'build-cache-' + Date.now()
+  },
+  generateEtags: false,
 };
 
 export default nextConfig;

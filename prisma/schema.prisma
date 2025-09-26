@@ -3,6 +3,9 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Limit binaries to reduce serverless function size on Netlify (Amazon Linux)
+  // "native" for local dev, "debian-openssl-3.0.x" for Netlify build/runtime
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

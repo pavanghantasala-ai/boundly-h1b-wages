@@ -101,13 +101,13 @@ export default function Header() {
             ) : (
               <>
                 <Link
-                  href="/auth/signin"
+                  href="/login"
                   className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
                 >
                   Sign in
                 </Link>
                 <Link
-                  href="/auth/signup"
+                  href="/login"
                   className="btn btn-primary btn-sm"
                 >
                   Get started
@@ -180,14 +180,14 @@ export default function Header() {
               ) : (
                 <div className="pt-4 pb-2 border-t border-border mt-2">
                   <Link
-                    href="/auth/signin"
+                    href="/login"
                     className="block w-full px-4 py-2 text-center text-sm font-medium text-foreground/80 hover:text-primary mb-2"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Sign in
                   </Link>
                   <Link
-                    href="/auth/signup"
+                    href="/login"
                     className="block w-full px-4 py-2 text-center text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-colors"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >

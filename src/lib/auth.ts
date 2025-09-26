@@ -1,13 +1,9 @@
 import type { NextAuthOptions } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // Providers without database adapter to keep serverless bundle small
   providers: [
     GitHubProvider({
       clientId: process.env.GITHUB_ID || "",
@@ -17,32 +13,32 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
-    CredentialsProvider({
-      name: "Email & Password",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        const email = credentials?.email?.toLowerCase().trim();
-        const password = credentials?.password || "";
-        if (!email || !password) return null;
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.passwordHash) return null;
-        const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
-        return { id: user.id, email: user.email!, name: user.name || undefined } as any;
-      },
-    }),
   ],
-  session: { strategy: "database" },
+  // Use JWT-based sessions (no database storage)
+  session: { strategy: "jwt" },
   pages: {
-    signIn: "/login", // reuse our login UI; we can add a GitHub button there later
+    signIn: "/login",
   },
   callbacks: {
-    async session({ session, user }) {
+    async jwt({ token, account, profile, user }) {
+      // When a user signs in, enhance the token with profile details
+      if (account && profile) {
+        token.name = (profile as any).name ?? token.name;
+        token.email = (profile as any).email ?? token.email;
+        token.picture = (profile as any).picture ?? token.picture;
+      }
+      // Preserve user id if available (OAuth user id is in token.sub)
+      if (user && (user as any).id) {
+        (token as any).id = (user as any).id;
+      }
+      return token;
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
+        (session.user as any).id = (token as any).id || token.sub || undefined;
+        session.user.name = token.name as string | undefined;
+        session.user.email = token.email as string | undefined;
+        (session.user as any).image = (token as any).picture as string | undefined;
       }
       return session;
     },

@@ -1,54 +1,51 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter as FontSans } from "next/font/google";
 import "./globals.css";
-import Link from "next/link";
-import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { cn } from "@/lib/utils";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fontSans = FontSans({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: "--font-sans",
 });
 
 export const metadata: Metadata = {
-  title: "Boundly",
+  title: "Boundly - Prevailing Wage & H-1B Calculator",
   description: "Find your prevailing wage level and H-1B selection weighting",
+  keywords: ["H-1B", "prevailing wage", "wage level", "immigration", "PERM", "LCA"],
+  authors: [
+    {
+      name: "Boundly Team",
+      url: "https://boundly.app",
+    },
+  ],
+  creator: "Boundly",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "white" },
+    { media: "(prefers-color-scheme: dark)", color: "black" },
+  ],
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://boundly.app",
+    title: "Boundly - Prevailing Wage & H-1B Calculator",
+    description: "Find your prevailing wage level and H-1B selection weighting",
+    siteName: "Boundly",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Boundly - Prevailing Wage & H-1B Calculator",
+    description: "Find your prevailing wage level and H-1B selection weighting",
+    images: ["https://boundly.app/og-image.jpg"],
+    creator: "@boundly",
+  },
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon-16x16.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
-
-function Header() {
-  const { user, logout } = useAuth();
-  return (
-    <header className="border-b border-gray-200 dark:border-gray-800">
-      <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="text-lg font-semibold">Boundly</Link>
-        <nav className="flex items-center gap-4 text-sm">
-          {user ? (
-            <>
-              <span className="text-gray-700 dark:text-gray-300">Hi, {user.name}</span>
-              <button
-                onClick={logout}
-                className="rounded-md border px-3 py-1 hover:bg-gray-50 dark:hover:bg-gray-900"
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <Link
-              href="/login"
-              className="rounded-md border px-3 py-1 hover:bg-gray-50 dark:hover:bg-gray-900"
-            >
-              Login
-            </Link>
-          )}
-        </nav>
-      </div>
-    </header>
-  );
-}
 
 export default function RootLayout({
   children,
@@ -56,12 +53,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthProvider>
-          <Header />
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+      </head>
+      <body
+        className={cn(
+          "min-h-screen bg-background font-sans antialiased",
+          fontSans.variable
+        )}
+      >
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           {children}
-        </AuthProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

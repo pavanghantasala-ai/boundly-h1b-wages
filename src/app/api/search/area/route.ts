@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readIndex } from "@/lib/dataStore";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -9,26 +9,24 @@ export async function GET(req: NextRequest) {
     const q = (searchParams.get("q") || "").trim().toLowerCase();
     if (!q) return NextResponse.json({ items: [] });
 
-    const index = await readIndex();
-    if (!index || index.length === 0) return NextResponse.json({ items: [] });
+    const pool = await prisma.wageIndex.findMany({
+      where: { areaName: { contains: q, mode: "insensitive" } },
+      select: { areaName: true, areaCode: true },
+      take: 200,
+    });
 
-    const matches = index
-      .map((r) => ({ areaName: r.areaName, areaCode: r.areaCode }))
-      .filter((r) => r.areaName.toLowerCase().includes(q))
-      .slice(0, 50);
-
-    // Dedup by areaName
     const seen = new Set<string>();
-    const dedup: { areaName: string; areaCode: string }[] = [];
-    for (const m of matches) {
-      if (!seen.has(m.areaName)) {
-        seen.add(m.areaName);
-        dedup.push(m);
+    const items: Array<{ areaName: string; areaCode: string }> = [];
+    for (const m of pool) {
+      const key = `${m.areaCode}|${m.areaName}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push({ areaName: m.areaName, areaCode: m.areaCode });
       }
-      if (dedup.length >= 10) break;
+      if (items.length >= 10) break;
     }
 
-    return NextResponse.json({ items: dedup });
+    return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json({ items: [] });
   }

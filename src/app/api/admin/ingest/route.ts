@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { ensureDataDir, dataInfo } from "@/lib/dataStore";
-import { buildIndexFromExtracted } from "@/lib/ingest";
+import { buildIndexFromExtracted, indexRecordsToDbRows } from "@/lib/ingest";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,20 @@ export async function POST(req: NextRequest) {
     const files = await extractZipTo(targetDir, buffer);
 
     const built = await buildIndexFromExtracted(targetDir);
+
+    // Upsert into DB: replace rows for the given year
+    await prisma.$transaction([
+      prisma.wageIndex.deleteMany({ where: { year } }),
+    ]);
+    const rows = indexRecordsToDbRows(year, built.records);
+    if (rows.length > 0) {
+      // createMany with batches to avoid size limits
+      const batchSize = 1000;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const batch = rows.slice(i, i + batchSize);
+        await prisma.wageIndex.createMany({ data: batch, skipDuplicates: true });
+      }
+    }
 
     return NextResponse.json({
       ok: true,

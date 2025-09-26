@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { useEffect, useState, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, MapPin, DollarSign, Calendar, AlertCircle } from "lucide-react";
+import Logo from "@/components/Logo";
 
 type ApiResponse = {
   inputs: {
@@ -25,13 +28,38 @@ type ApiResponse = {
 };
 
 export default function Home() {
-  const { user, ready } = useAuth();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
 
+  // Core inputs
+  const [socOrTitle, setSocOrTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [offeredWage, setOfferedWage] = useState("");
+  const [offeredUnit, setOfferedUnit] = useState<"hourly" | "annual">("annual");
+  const [year, setYear] = useState("2025-26");
+
+  // Autocomplete state
+  const [socQuery, setSocQuery] = useState("");
+  const [socSuggestions, setSocSuggestions] = useState<Array<{ soc: string; title: string }>>([]);
+  const [showSocSuggestions, setShowSocSuggestions] = useState(false);
+  const [areaQuery, setAreaQuery] = useState("");
+  const [areaSuggestions, setAreaSuggestions] = useState<Array<{ areaName: string; areaCode: string }>>([]);
+  const [showAreaSuggestions, setShowAreaSuggestions] = useState(false);
+  const [areaCode, setAreaCode] = useState<string | undefined>(undefined);
+
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ApiResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<"wage" | "h1b">("wage");
+
+  // Redirect unauthenticated users
   useEffect(() => {
-    if (ready && !user) {
+    if (status === "unauthenticated") {
       router.replace("/login");
     }
+  }, [status, router]);
 
   // Fetch SOC suggestions
   useEffect(() => {
@@ -45,9 +73,11 @@ export default function Home() {
       try {
         const r = await fetch(`/api/search/soc?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
         const data = await r.json();
-        const items: Array<{ soc: string; title: string }> = (data?.items || []).map((x: any) => ({ soc: x.soc, title: x.title }));
+        const items: Array<{ soc: string; title: string }> = (data?.items || []).map((x: { soc: string; title: string }) => ({ soc: x.soc, title: x.title }));
         setSocSuggestions(items);
-      } catch (_) {}
+      } catch {
+        // ignore
+      }
     };
     run();
     return () => ctrl.abort();
@@ -65,35 +95,15 @@ export default function Home() {
       try {
         const r = await fetch(`/api/search/area?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
         const data = await r.json();
-        const items: Array<{ areaName: string; areaCode: string }> = (data?.items || []).map((x: any) => ({ areaName: x.areaName, areaCode: x.areaCode }));
+        const items: Array<{ areaName: string; areaCode: string }> = (data?.items || []).map((x: { areaName: string; areaCode: string }) => ({ areaName: x.areaName, areaCode: x.areaCode }));
         setAreaSuggestions(items);
-      } catch (_) {}
+      } catch {
+        // ignore
+      }
     };
     run();
     return () => ctrl.abort();
   }, [areaQuery]);
-  }, [ready, user, router]);
-
-  if (!ready || !user) {
-    return null;
-  }
-
-  const [socOrTitle, setSocOrTitle] = useState("");
-  const [location, setLocation] = useState("");
-  const [offeredWage, setOfferedWage] = useState("");
-  const [offeredUnit, setOfferedUnit] = useState<"hourly" | "annual">("annual");
-  const [year, setYear] = useState("2025-26");
-
-  // Autocomplete state
-  const [socQuery, setSocQuery] = useState("");
-  const [socSuggestions, setSocSuggestions] = useState<Array<{ soc: string; title: string }>>([]);
-  const [areaQuery, setAreaQuery] = useState("");
-  const [areaSuggestions, setAreaSuggestions] = useState<Array<{ areaName: string; areaCode: string }>>([]);
-  const [areaCode, setAreaCode] = useState<string | undefined>(undefined);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ApiResponse | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,13 +124,13 @@ export default function Home() {
         }),
       });
       if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
+        const data = (await resp.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || `Request failed with ${resp.status}`);
       }
       const data: ApiResponse = await resp.json();
       setResult(data);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function AdminPage() {
-  const { user, ready } = useAuth();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const allow = useMemo(() => {
     const list = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -17,14 +17,14 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
-    const email = user?.email?.toLowerCase();
+    if (status === "loading") return;
+    const email = session?.user?.email?.toLowerCase();
     const authorized = !!email && (allow.length === 0 || allow.includes(email));
     if (!authorized) {
       router.replace("/");
     }
-  }, [ready, user, allow, router]);
-  if (!ready) return null;
+  }, [status, session, allow, router]);
+  if (status !== "authenticated") return null;
 
   async function runIngest() {
     setLoading(true);

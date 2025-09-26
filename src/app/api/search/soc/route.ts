@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readIndex } from "@/lib/dataStore";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -9,40 +9,45 @@ export async function GET(req: NextRequest) {
     const q = (searchParams.get("q") || "").trim().toLowerCase();
     if (!q) return NextResponse.json({ items: [] });
 
-    const index = await readIndex();
-    if (!index || index.length === 0) return NextResponse.json({ items: [] });
+    const pool = await prisma.wageIndex.findMany({
+      where: {
+        OR: [
+          { soc: q },
+          { soc: { startsWith: q } },
+          { title: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: { soc: true, title: true },
+      take: 200,
+    });
 
-    // Score: exact soc match highest, then title includes, then soc startsWith
-    const matches = index
-      .map((r) => ({
-        soc: r.soc,
-        title: r.title,
-        areaName: r.areaName,
-        score:
-          r.soc.toLowerCase() === q
-            ? 100
-            : r.title.toLowerCase().includes(q)
-            ? 80
-            : r.soc.toLowerCase().startsWith(q)
-            ? 60
-            : 0,
-      }))
-      .filter((m) => m.score > 0)
-      .sort((a, b) => b.score - a.score);
+    type Row = { soc: string; title: string };
+    const scored = pool.map((r: Row) => ({
+      soc: r.soc,
+      title: r.title,
+      score:
+        r.soc.toLowerCase() === q
+          ? 100
+          : r.title.toLowerCase().includes(q)
+          ? 80
+          : r.soc.toLowerCase().startsWith(q)
+          ? 60
+          : 0,
+    }));
+    scored.sort((a, b) => b.score - a.score);
 
-    // Deduplicate by SOC + title to avoid many area rows
     const seen = new Set<string>();
-    const dedup: typeof matches = [];
-    for (const m of matches) {
-      const key = `${m.soc}|${m.title}`;
-      if (!seen.has(key)) {
+    const items: Array<{ soc: string; title: string }> = [];
+    for (const s of scored) {
+      const key = `${s.soc}|${s.title}`;
+      if (!seen.has(key) && s.score > 0) {
         seen.add(key);
-        dedup.push(m);
+        items.push({ soc: s.soc, title: s.title });
       }
-      if (dedup.length >= 10) break;
+      if (items.length >= 10) break;
     }
 
-    return NextResponse.json({ items: dedup });
+    return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json({ items: [] });
   }

@@ -24,6 +24,7 @@ export type WageLookupResponse = {
 };
 
 import { readIndex, type IndexRecord } from "@/lib/dataStore";
+import { prisma } from "@/lib/prisma";
 
 // A tiny in-memory mock dataset. Replace with parsed CSV from OFLC zip.
 const MOCK_DATA: Array<{
@@ -67,9 +68,50 @@ function bestMatchBySocOrTitleFromMock(query: string) {
 export async function lookupWages(
   req: WageLookupRequest
 ): Promise<WageLookupResponse> {
-  // Attempt to use cached index from OFLC dataset
-  const index = await readIndex();
+  // Attempt to use DB first
   const q = req.socOrTitle.trim().toLowerCase();
+  const areaCode = req.areaCode;
+  try {
+    const dbPool = await prisma.wageIndex.findMany({
+      where: areaCode ? { areaCode } : undefined,
+      take: 2000,
+      select: {
+        soc: true,
+        title: true,
+        areaCode: true,
+        areaName: true,
+        unit: true,
+        level1: true,
+        level2: true,
+        level3: true,
+        level4: true,
+      },
+    });
+    if (dbPool.length > 0) {
+      type Row = typeof dbPool[number];
+      const exact = dbPool.find((r: Row) => r.soc.toLowerCase() === q);
+      const rec = exact || dbPool.find((r: Row) => r.title.toLowerCase().includes(q)) || dbPool[0];
+      if (rec) {
+        return {
+          matchedSocCode: rec.soc,
+          matchedSocTitle: rec.title,
+          areaName: rec.areaName,
+          unit: "hourly",
+          wages: {
+            level1: Number(rec.level1),
+            level2: Number(rec.level2),
+            level3: Number(rec.level3),
+            level4: Number(rec.level4),
+          },
+        };
+      }
+    }
+  } catch (e) {
+    // ignore DB errors and fallback
+  }
+
+  // Fallback to cached JSON index from filesystem if present
+  const index = await readIndex();
   if (index && index.length > 0) {
     const pool = req.areaCode
       ? index.filter((r) => r.areaCode === req.areaCode)

@@ -9,31 +9,29 @@ export async function GET(req: NextRequest) {
     const q = (searchParams.get("q") || "").trim().toLowerCase();
     if (!q) return NextResponse.json({ items: [] });
 
+    // Fetch a generous pool and then de-duplicate by (soc,title)
     const pool = await prisma.wageIndex.findMany({
       where: {
         OR: [
-          { soc: q },
           { soc: { startsWith: q } },
           { title: { contains: q, mode: "insensitive" } },
         ],
       },
       select: { soc: true, title: true },
-      take: 200,
+      take: 300,
     });
 
+    // Prefer exact SOC matches first, then title contains, then SOC prefix
     type Row = { soc: string; title: string };
-    const scored = pool.map((r: Row) => ({
-      soc: r.soc,
-      title: r.title,
-      score:
-        r.soc.toLowerCase() === q
-          ? 100
-          : r.title.toLowerCase().includes(q)
-          ? 80
-          : r.soc.toLowerCase().startsWith(q)
-          ? 60
-          : 0,
-    }));
+    const scored = pool.map((r: Row) => {
+      const socLc = r.soc.toLowerCase();
+      const titleLc = r.title.toLowerCase();
+      let score = 0;
+      if (socLc === q) score = 100;
+      else if (titleLc.includes(q)) score = 85;
+      else if (socLc.startsWith(q)) score = 70;
+      return { soc: r.soc, title: r.title, score };
+    });
     scored.sort((a, b) => b.score - a.score);
 
     const seen = new Set<string>();

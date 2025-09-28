@@ -97,3 +97,75 @@ model QueryLog {
 
   user User? @relation(fields: [userId], references: [id])
 }
+
+/// New tables aligned to the H-1B design document
+
+model Registrant {
+  id                   String   @id @default(uuid())
+  firstName            String?
+  lastName             String?
+  email                String?
+  employerName         String?
+  jobTitle             String
+  socCode              String?
+  offeredSalaryAnnual  Decimal  @db.Decimal(12,2)
+  workCity             String?
+  workState            String?
+  mastersExemption     Boolean  @default(false)
+  submittedDate        DateTime @default(now())
+
+  calculationRuns      CalculationRun[]
+
+  @@index([socCode])
+  @@index([jobTitle])
+}
+
+// Normalized wage levels table (annualized wage figures)
+model WageLevel {
+  id        String  @id @default(uuid())
+  socCode   String
+  areaCode  String
+  level1    Decimal @db.Decimal(12,2)
+  level2    Decimal @db.Decimal(12,2)
+  level3    Decimal @db.Decimal(12,2)
+  level4    Decimal @db.Decimal(12,2)
+  unit      String  // stored unit reference, but values are annualized
+  sourceDate DateTime?
+
+  @@index([socCode])
+  @@index([areaCode])
+  @@unique([socCode, areaCode])
+}
+
+model SocMapping {
+  id                 String   @id @default(uuid())
+  normalizedJobTitle String
+  socCode            String
+  confidenceScore    Float    @default(0)
+  createdAt          DateTime @default(now())
+
+  @@index([normalizedJobTitle])
+}
+
+model CalculationRun {
+  id            String   @id @default(uuid())
+  registrantId  String
+  modelVersion  String
+  inputsJson    Json
+  outputsJson   Json
+  createdAt     DateTime @default(now())
+
+  registrant Registrant @relation(fields: [registrantId], references: [id], onDelete: Cascade)
+
+  @@index([registrantId])
+}
+
+model AppSetting {
+  id                String   @id @default(uuid())
+  currentCapTotal   Int      @default(65000)
+  mastersExemption  Int      @default(20000)
+  selectionPolicy   String   @default("random") // random | weighted_by_salary | dhs_proposed
+  weightedBuckets   Json?    // e.g., { "1": 1, "2": 2, "3": 4, "4": 10 }
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

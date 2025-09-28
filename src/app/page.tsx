@@ -291,14 +291,22 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Unit</label>
-                  <select
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
-                    value={offeredUnit}
-                    onChange={(e) => setOfferedUnit(e.target.value as any)}
-                  >
-                    <option value="annual">Annual</option>
-                    <option value="hourly">Hourly</option>
-                  </select>
+                  <div className="inline-flex items-center rounded-xl border border-slate-300 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setOfferedUnit("annual")}
+                      className={`px-4 py-2 text-sm ${offeredUnit === "annual" ? "bg-blue-600 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      Annual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOfferedUnit("hourly")}
+                      className={`px-4 py-2 text-sm border-l border-slate-300 ${offeredUnit === "hourly" ? "bg-blue-600 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      Hourly
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Year</label>
@@ -315,15 +323,16 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Sticky submit on mobile */}
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 text-sm font-medium disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 text-sm font-medium disabled:opacity-60 sm:relative sm:bottom-auto sm:w-auto fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] sm:translate-x-0 sm:fixed-none"
                 disabled={loading}
               >
                 {loading ? "Calculating…" : "Get wage level"}
               </button>
-              {error && <span className="text-sm text-red-600">{error}</span>}
+              {error && <span className="hidden sm:inline text-sm text-red-600">{error}</span>}
             </div>
           </form>
         </section>

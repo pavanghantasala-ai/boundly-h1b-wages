@@ -43,9 +43,11 @@ export default function Home() {
   // Autocomplete state
   const [socQuery, setSocQuery] = useState("");
   const [socSuggestions, setSocSuggestions] = useState<Array<{ soc: string; title: string }>>([]);
+  const [socLoading, setSocLoading] = useState(false);
   const [showSocSuggestions, setShowSocSuggestions] = useState(false);
   const [areaQuery, setAreaQuery] = useState("");
   const [areaSuggestions, setAreaSuggestions] = useState<Array<{ areaName: string; areaCode: string }>>([]);
+  const [areaLoading, setAreaLoading] = useState(false);
   const [showAreaSuggestions, setShowAreaSuggestions] = useState(false);
   const [areaCode, setAreaCode] = useState<string | undefined>(undefined);
 
@@ -62,48 +64,60 @@ export default function Home() {
     }
   }, [status, router]);
 
-  // Fetch SOC suggestions
+  // Fetch SOC suggestions (debounced)
   useEffect(() => {
     const q = socQuery.trim();
     if (q.length < 2) {
       setSocSuggestions([]);
+      setSocLoading(false);
       return;
     }
+    setSocLoading(true);
     const ctrl = new AbortController();
-    const run = async () => {
+    const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/search/soc?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
         const data = await r.json();
         const items: Array<{ soc: string; title: string }> = (data?.items || []).map((x: { soc: string; title: string }) => ({ soc: x.soc, title: x.title }));
         setSocSuggestions(items);
       } catch {
-        // ignore
+        setSocSuggestions([]);
+      } finally {
+        setSocLoading(false);
       }
+    }, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
     };
-    run();
-    return () => ctrl.abort();
   }, [socQuery]);
 
-  // Fetch Area suggestions
+  // Fetch Area suggestions (debounced)
   useEffect(() => {
     const q = areaQuery.trim();
     if (q.length < 2) {
       setAreaSuggestions([]);
+      setAreaLoading(false);
       return;
     }
+    setAreaLoading(true);
     const ctrl = new AbortController();
-    const run = async () => {
+    const t = setTimeout(async () => {
       try {
         const r = await fetch(`/api/search/area?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
         const data = await r.json();
         const items: Array<{ areaName: string; areaCode: string }> = (data?.items || []).map((x: { areaName: string; areaCode: string }) => ({ areaName: x.areaName, areaCode: x.areaCode }));
         setAreaSuggestions(items);
       } catch {
-        // ignore
+        setAreaSuggestions([]);
+      } finally {
+        setAreaLoading(false);
       }
+    }, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
     };
-    run();
-    return () => ctrl.abort();
   }, [areaQuery]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -138,175 +152,204 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 dark:bg-black dark:text-white">
+    <div className="min-h-screen bg-white text-slate-900">
       <Header />
-      <div className="max-w-3xl mx-auto px-6 py-10 pt-24">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold">Boundly</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Find your prevailing wage level and a selection-weight estimate.
-          </p>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 pt-24">
+        <header className="mb-8 sm:mb-10">
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Find your prevailing wage level</h1>
+          <p className="text-base text-slate-600 mt-2">Enter a role and location to estimate the correct wage level and H‑1B selection weighting.</p>
         </header>
 
-        <section className="bg-gray-50 dark:bg-gray-900/40 rounded-xl border border-gray-200 dark:border-gray-800 p-6 mb-8">
-          <form className="grid gap-4" onSubmit={onSubmit}>
+        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-6 mb-8">
+          <form className="grid gap-4 sm:gap-5" onSubmit={onSubmit}>
+            {/* Role / SOC */}
             <div>
-              <label className="block text-sm font-medium mb-1">SOC code or Job title</label>
-              <input
-                type="text"
-                placeholder="e.g., 15-1252 or Software Developer"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2"
-                value={socOrTitle}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSocOrTitle(v);
-                  setSocQuery(v);
-                }}
-                required
-              />
-              {socSuggestions.length > 0 && (
-                <div className="mt-2 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-800">
-                  {socSuggestions.map((s) => (
-                    <button
-                      type="button"
-                      key={`${s.soc}|${s.title}`}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-900"
-                      onClick={() => {
-                        setSocOrTitle(`${s.soc}`);
-                        setSocQuery("");
-                        setSocSuggestions([]);
-                      }}
-                    >
-                      {s.title} — {s.soc}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                Providing an exact SOC code will yield the most accurate result. Consult your employer or immigration counsel for your SOC.
-              </p>
+              <label className="block text-sm font-medium mb-1.5">What’s the role or SOC code?</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="e.g., Software Developer or 15-1252"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
+                  value={socOrTitle}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSocOrTitle(v);
+                    setSocQuery(v);
+                    setShowSocSuggestions(true);
+                  }}
+                  onFocus={() => socSuggestions.length > 0 && setShowSocSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSocSuggestions(false), 150)}
+                  required
+                />
+                {showSocSuggestions && (
+                  <div className="absolute z-20 mt-2 w-full max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    {socLoading ? (
+                      <div className="px-4 py-3 text-sm text-slate-500">Searching…</div>
+                    ) : socQuery.trim().length >= 2 && socSuggestions.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-slate-500">No matches. Try a different title or exact SOC code.</div>
+                    ) : (
+                      socSuggestions.slice(0, 10).map((s) => (
+                        <button
+                          type="button"
+                          key={`${s.soc}|${s.title}`}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50"
+                          onClick={() => {
+                            setSocOrTitle(`${s.soc}`);
+                            setSocQuery("");
+                            setSocSuggestions([]);
+                            setShowSocSuggestions(false);
+                          }}
+                        >
+                          <div className="font-medium">{s.title}</div>
+                          <div className="text-xs text-slate-500">{s.soc}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-2">Tip: Exact SOC gives the best match. Your employer or counsel can provide your SOC.</p>
             </div>
 
+            {/* Location */}
             <div>
-              <label className="block text-sm font-medium mb-1">Location</label>
+              <label className="block text-sm font-medium mb-1.5">Where is the job located?</label>
               <input
                 type="text"
-                placeholder="City, State (we'll map to the closest area)"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2"
+                placeholder="City, State (we’ll map this to the closest area)"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 required
               />
             </div>
 
+            {/* Area (optional) */}
             <div>
-              <label className="block text-sm font-medium mb-1">Area (optional)</label>
-              <input
-                type="text"
-                placeholder="Start typing a county/MSA area name"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2"
-                value={areaQuery}
-                onChange={(e) => {
-                  setAreaQuery(e.target.value);
-                  setAreaCode(undefined);
-                }}
-              />
-              {areaSuggestions.length > 0 && (
-                <div className="mt-2 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-800">
-                  {areaSuggestions.map((a) => (
-                    <button
-                      type="button"
-                      key={`${a.areaCode}|${a.areaName}`}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-900"
-                      onClick={() => {
-                        setAreaQuery(a.areaName);
-                        setAreaCode(a.areaCode);
-                        setAreaSuggestions([]);
-                      }}
-                    >
-                      {a.areaName}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {areaCode && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Selected area code: {areaCode}</p>
-              )}
+              <label className="block text-sm font-medium mb-1.5">Do you know the area (optional)?</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Start typing a county/MSA area name"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
+                  value={areaQuery}
+                  onChange={(e) => {
+                    setAreaQuery(e.target.value);
+                    setAreaCode(undefined);
+                    setShowAreaSuggestions(true);
+                  }}
+                  onFocus={() => areaSuggestions.length > 0 && setShowAreaSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowAreaSuggestions(false), 150)}
+                />
+                {showAreaSuggestions && (
+                  <div className="absolute z-20 mt-2 w-full max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                    {areaLoading ? (
+                      <div className="px-4 py-3 text-sm text-slate-500">Searching areas…</div>
+                    ) : areaQuery.trim().length >= 2 && areaSuggestions.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-slate-500">No areas found. Try a different spelling.</div>
+                    ) : (
+                      areaSuggestions.slice(0, 10).map((a) => (
+                        <button
+                          type="button"
+                          key={`${a.areaCode}|${a.areaName}`}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50"
+                          onClick={() => {
+                            setAreaQuery(a.areaName);
+                            setAreaCode(a.areaCode);
+                            setAreaSuggestions([]);
+                            setShowAreaSuggestions(false);
+                          }}
+                        >
+                          <div className="font-medium">{a.areaName}</div>
+                          <div className="text-xs text-slate-500">Code: {a.areaCode}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+                {areaCode && (
+                  <p className="text-xs text-slate-500 mt-2">Selected area code: {areaCode}</p>
+                )}
+              </div>
             </div>
 
+            {/* Wage + unit + year */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium mb-1">Offered wage</label>
+                <label className="block text-sm font-medium mb-1.5">What is the offered wage?</label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   placeholder="e.g., 120000"
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
                   value={offeredWage}
                   onChange={(e) => setOfferedWage(e.target.value)}
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Unit</label>
-                <select
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2"
-                  value={offeredUnit}
-                  onChange={(e) => setOfferedUnit(e.target.value as any)}
-                >
-                  <option value="annual">Annual</option>
-                  <option value="hourly">Hourly</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Unit</label>
+                  <select
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
+                    value={offeredUnit}
+                    onChange={(e) => setOfferedUnit(e.target.value as any)}
+                  >
+                    <option value="annual">Annual</option>
+                    <option value="hourly">Hourly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Year</label>
+                  <select
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                  >
+                    <option value="2025-26">2025-26</option>
+                    <option value="2024-25">2024-25</option>
+                    <option value="2023-24">2023-24</option>
+                  </select>
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Year</label>
-              <select
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black px-3 py-2"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-              >
-                <option value="2025-26">2025-26</option>
-                <option value="2024-25">2024-25</option>
-                <option value="2023-24">2023-24</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 text-sm font-medium disabled:opacity-60"
                 disabled={loading}
               >
-                {loading ? "Calculating…" : "Check wage level"}
+                {loading ? "Calculating…" : "Get wage level"}
               </button>
               {error && <span className="text-sm text-red-600">{error}</span>}
             </div>
           </form>
         </section>
 
+        {!result && (
+          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+            Enter a role, location, and wage to see your results here.
+          </div>
+        )}
+
         {result && (
           <section className="grid gap-4">
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-black">
-              <h2 className="text-lg font-semibold mb-3">Provider match</h2>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                SOC {result.providerMatch.soc} — {result.providerMatch.title}
-              </p>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                Area: {result.providerMatch.area}
-              </p>
-              <div className="mt-3 text-sm">
-                <div>Level I: ${" "}{result.providerMatch.wages.level1.toFixed(2)} /hr</div>
-                <div>Level II: ${" "}{result.providerMatch.wages.level2.toFixed(2)} /hr</div>
-                <div>Level III: ${" "}{result.providerMatch.wages.level3.toFixed(2)} /hr</div>
-                <div>Level IV: ${" "}{result.providerMatch.wages.level4.toFixed(2)} /hr</div>
+            <div className="rounded-2xl border border-slate-200 p-6 bg-white">
+              <h2 className="text-base font-semibold mb-3">Provider match</h2>
+              <p className="text-sm text-slate-700">SOC {result.providerMatch.soc} — {result.providerMatch.title}</p>
+              <p className="text-sm text-slate-700">Area: {result.providerMatch.area}</p>
+              <div className="mt-3 text-sm grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg border border-slate-200 p-3">L1: ${" "}{result.providerMatch.wages.level1.toFixed(2)}/hr</div>
+                <div className="rounded-lg border border-slate-200 p-3">L2: ${" "}{result.providerMatch.wages.level2.toFixed(2)}/hr</div>
+                <div className="rounded-lg border border-slate-200 p-3">L3: ${" "}{result.providerMatch.wages.level3.toFixed(2)}/hr</div>
+                <div className="rounded-lg border border-slate-200 p-3">L4: ${" "}{result.providerMatch.wages.level4.toFixed(2)}/hr</div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-black">
-              <h2 className="text-lg font-semibold mb-3">Your result</h2>
+            <div className="rounded-2xl border border-slate-200 p-6 bg-white">
+              <h2 className="text-base font-semibold mb-3">Your result</h2>
               <p className="text-sm">Offered (hourly): ${" "}{result.computation.offeredHourly.toFixed(2)} /hr</p>
               <p className="text-sm mt-1">Computed level: Level {result.computation.level}</p>
               {result.computation.belowLevel1 && (
@@ -314,14 +357,14 @@ export default function Home() {
               )}
             </div>
 
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-black">
-              <h2 className="text-lg font-semibold mb-3">H-1B selection weighting</h2>
+            <div className="rounded-2xl border border-slate-200 p-6 bg-white">
+              <h2 className="text-base font-semibold mb-3">H‑1B selection weighting</h2>
               <p className="text-sm">Chances: {result.lottery.weight} per the wage level.</p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{result.lottery.rationale}</p>
+              <p className="text-xs text-slate-500 mt-1">{result.lottery.rationale}</p>
             </div>
 
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6 bg-gray-50 dark:bg-gray-900/40">
-              <p className="text-xs text-gray-600 dark:text-gray-400">{result.disclaimer}</p>
+            <div className="rounded-2xl border border-slate-200 p-6 bg-slate-50">
+              <p className="text-xs text-slate-500">{result.disclaimer}</p>
             </div>
           </section>
         )}

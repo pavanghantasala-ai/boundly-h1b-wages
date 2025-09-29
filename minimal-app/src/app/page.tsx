@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type WageRow = {
   soc: string;
@@ -46,7 +46,8 @@ export default function HomePage() {
       return;
     }
     const t = setTimeout(async () => {
-      const or = `or=(soc.ilike.${q.replaceAll("(", "").replaceAll(")","")}*,title.ilike.*${q}*)`;
+      const qSan = q.replace(/[()]/g, "");
+      const or = `or=(soc.ilike.${qSan}*,title.ilike.*${qSan}*)`;
       const { data } = await supabase
         .from("WageIndex")
         .select("soc,title")

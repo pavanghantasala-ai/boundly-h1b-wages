@@ -10,9 +10,5 @@
   # Set this to your email (comma-separated) to access /admin
   # NEXT_PUBLIC_ADMIN_EMAILS = ""
 
-# Ensure large dependencies like Prisma are treated as externals and ship only required files
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@prisma/client", "prisma"]
-  # Only include Prisma engines/client binaries, not the entire prisma/ dir
-  included_files = ["node_modules/.prisma/**"]

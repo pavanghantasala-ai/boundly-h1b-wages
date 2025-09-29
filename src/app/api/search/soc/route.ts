@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,17 +9,28 @@ export async function GET(req: NextRequest) {
     const q = (searchParams.get("q") || "").trim().toLowerCase();
     if (!q) return NextResponse.json({ items: [] });
 
-    // Fetch a generous pool and then de-duplicate by (soc,title)
-    const pool = await prisma.wageIndex.findMany({
-      where: {
-        OR: [
-          { soc: { startsWith: q } },
-          { title: { contains: q, mode: "insensitive" } },
-        ],
-      },
-      select: { soc: true, title: true },
-      take: 300,
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ items: [] });
+    }
+
+    // Fetch a generous pool via Supabase REST and then de-duplicate by (soc,title)
+    const url = new URL(`${SUPABASE_URL}/rest/v1/WageIndex`);
+    url.searchParams.set("select", "soc,title");
+    // OR filter (PostgREST): or=(soc.ilike.q*,title.ilike.*q*)
+    const encQ = encodeURIComponent(q);
+    url.searchParams.set("or", `(soc.ilike.${encQ}*,title.ilike.*${encQ}*)`);
+    const resp = await fetch(url.toString(), {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Range: "0-299",
+        Prefer: "count=exact",
+      } as any,
     });
+    if (!resp.ok) return NextResponse.json({ items: [] });
+    const pool = (await resp.json()) as Array<{ soc: string; title: string }>;
 
     // Prefer exact SOC matches first, then title contains, then SOC prefix
     type Row = { soc: string; title: string };

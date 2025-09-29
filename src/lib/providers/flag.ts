@@ -24,7 +24,6 @@ export type WageLookupResponse = {
 };
 
 import { readIndex, type IndexRecord } from "@/lib/dataStore";
-import { prisma } from "@/lib/prisma";
 
 // A tiny in-memory mock dataset. Replace with parsed CSV from OFLC zip.
 const MOCK_DATA: Array<{
@@ -68,46 +67,67 @@ function bestMatchBySocOrTitleFromMock(query: string) {
 export async function lookupWages(
   req: WageLookupRequest
 ): Promise<WageLookupResponse> {
-  // Attempt to use DB first
+  // Attempt to use Supabase REST first (keeps Netlify functions small)
   const q = req.socOrTitle.trim().toLowerCase();
   const areaCode = req.areaCode;
-  try {
-    const dbPool = await prisma.wageIndex.findMany({
-      where: areaCode ? { areaCode } : undefined,
-      take: 2000,
-      select: {
-        soc: true,
-        title: true,
-        areaCode: true,
-        areaName: true,
-        unit: true,
-        level1: true,
-        level2: true,
-        level3: true,
-        level4: true,
-      },
-    });
-    if (dbPool.length > 0) {
-      type Row = typeof dbPool[number];
-      const exact = dbPool.find((r: Row) => r.soc.toLowerCase() === q);
-      const rec = exact || dbPool.find((r: Row) => r.title.toLowerCase().includes(q)) || dbPool[0];
-      if (rec) {
-        return {
-          matchedSocCode: rec.soc,
-          matchedSocTitle: rec.title,
-          areaName: rec.areaName,
-          unit: "hourly",
-          wages: {
-            level1: Number(rec.level1),
-            level2: Number(rec.level2),
-            level3: Number(rec.level3),
-            level4: Number(rec.level4),
-          },
-        };
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const url = new URL(`${SUPABASE_URL}/rest/v1/WageIndex`);
+      url.searchParams.set(
+        "select",
+        "soc,title,areaCode,areaName,unit,level1,level2,level3,level4"
+      );
+      if (areaCode) {
+        url.searchParams.set("areaCode", `eq.${areaCode}`);
       }
+      // OR: exact soc (prefix match), title contains, or soc prefix
+      // PostgREST syntax: or=(soc.ilike.q*,title.ilike.*q*,soc.ilike.q*)
+      const encQ = encodeURIComponent(q);
+      url.searchParams.set("or", `(soc.ilike.${encQ}*,title.ilike.*${encQ}*,soc.ilike.${encQ}*)`);
+      const resp = await fetch(url.toString(), {
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          Range: "0-999",
+          Prefer: "count=exact",
+        } as any,
+      });
+      if (resp.ok) {
+        const rows = (await resp.json()) as Array<{
+          soc: string;
+          title: string;
+          areaCode: string;
+          areaName: string;
+          unit: string;
+          level1: number;
+          level2: number;
+          level3: number;
+          level4: number;
+        }>;
+        if (Array.isArray(rows) && rows.length > 0) {
+          const socExact = rows.find((r) => r.soc.toLowerCase() === q);
+          const rec = socExact || rows.find((r) => r.title.toLowerCase().includes(q)) || rows[0];
+          if (rec) {
+            return {
+              matchedSocCode: rec.soc,
+              matchedSocTitle: rec.title,
+              areaName: rec.areaName,
+              unit: "hourly",
+              wages: {
+                level1: Number(rec.level1),
+                level2: Number(rec.level2),
+                level3: Number(rec.level3),
+                level4: Number(rec.level4),
+              },
+            };
+          }
+        }
+      }
+    } catch (_e) {
+      // ignore and fallback
     }
-  } catch (e) {
-    // ignore DB errors and fallback
   }
 
   // Fallback to cached JSON index from filesystem if present
